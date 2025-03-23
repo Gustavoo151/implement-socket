@@ -22,7 +22,16 @@ export class Protocol {
   }
 
   static deserialize(data: string): Message {
-    return JSON.parse(data) as Message;
+    try {
+      return JSON.parse(data) as Message;
+    } catch (e) {
+      console.error("Erro ao deserializar mensagem:", e);
+      return {
+        type: MessageType.ERROR,
+        content: "Formato de mensagem inválido",
+        timestamp: Date.now(),
+      };
+    }
   }
 
   static createChatMessage(sender: string, content: string): Message {
