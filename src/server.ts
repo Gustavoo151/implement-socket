@@ -2,9 +2,10 @@ import * as net from "net";
 import * as fs from "fs";
 
 // Configurações do servidor
-const HOST = "127.0.0.1";
+const HOST = "127.0.0.1"; // localhost
 const PORT = 3000;
 
+// Classe para gerenciar o servidor socket
 class SocketServer {
   private server: net.Server;
   private clients: Map<string, net.Socket>;
@@ -19,20 +20,20 @@ class SocketServer {
     this.initialize();
   }
 
-  // Configurações dos listeners de eventos do servidor
+  // Configuração dos listeners de eventos do servidor
   private initialize(): void {
-    // Evento disparando quando o servidor começa a escutar
+    // Evento disparado quando o servidor começa a escutar
     this.server.on("listening", () => {
-      console.log(`Servicor rodando em ${HOST}:${PORT}`);
+      console.log(`Servidor rodando em ${HOST}:${PORT}`);
       this.log(`Servidor iniciado em ${new Date().toISOString()}`);
     });
 
-    // Evento disparado quando o cliente se conecta
+    // Evento disparado quando um cliente se conecta
     this.server.on("connection", this.handleConnection.bind(this));
 
     // Evento disparado quando ocorre um erro no servidor
     this.server.on("error", (err: Error) => {
-      console.error("Erro no servidor", err.message);
+      console.error("Erro no servidor:", err.message);
       this.log(`ERRO: ${err.message}`);
     });
 
@@ -44,42 +45,42 @@ class SocketServer {
     });
   }
 
-  // Método para lidar com as novas conexões
+  // Método para lidar com novas conexões
   private handleConnection(socket: net.Socket): void {
-    // Gerar im ID único para o cliente com base no endereço e porta
+    // Gerar um ID único para o cliente com base no endereço e porta
     const clientId = `${socket.remoteAddress}:${socket.remotePort}`;
     this.clients.set(clientId, socket);
 
     console.log(`Cliente conectado: ${clientId}`);
     this.log(`Nova conexão: ${clientId}`);
 
-    // Enviar mensagem de boa vindas
-    socket.write(`Bem vindo ao servidor! Seu ID é: ${clientId}\n`);
+    // Enviar mensagem de boas-vindas ao cliente
+    socket.write(`Bem-vindo ao servidor! Seu ID é: ${clientId}\n`);
 
-    // Configurar tratadores de enventos para o socket do cliente
+    // Configurar tratadores de eventos para o socket do cliente
 
-    // Evento disparando quando dados são recebidos do cliente
+    // Evento disparado quando dados são recebidos do cliente
     socket.on("data", (data: Buffer) => {
       const message = data.toString().trim();
-      console.log(`Message de ${clientId}: ${message}`);
+      console.log(`Mensagem de ${clientId}: ${message}`);
       this.log(`Recebido de ${clientId}: ${message}`);
 
-      // Echo - envia a messagem de volta para o cliente
+      // Echo - envia a mensagem de volta para o cliente
       const response = `Eco: ${message}\n`;
       socket.write(response);
 
-      // Broadcast - envia a messagem para todos os outros clientes
+      // Broadcast - envia a mensagem para todos os outros clientes
       this.broadcast(clientId, `${clientId} diz: ${message}\n`);
     });
 
     // Evento disparado quando o cliente fecha a conexão
-    socket.on("en", () => {
+    socket.on("end", () => {
       console.log(`Cliente desconectado: ${clientId}`);
       this.log(`Desconexão: ${clientId}`);
       this.clients.delete(clientId);
     });
 
-    // evento disparado quando ocorre um erro na conexão com o cliente
+    // Evento disparado quando ocorre um erro na conexão com o cliente
     socket.on("error", (err: Error) => {
       console.error(`Erro na conexão com ${clientId}:`, err.message);
       this.log(`ERRO com ${clientId}: ${err.message}`);
@@ -107,7 +108,7 @@ class SocketServer {
     this.server.listen(PORT, HOST);
   }
 
-  // Fecha o serivodr e todas as conexões
+  // Fecha o servidor e todas as conexões
   public stop(): void {
     for (const client of this.clients.values()) {
       client.destroy();
@@ -116,13 +117,13 @@ class SocketServer {
   }
 }
 
-// Fecha o serivor e todas as conexões
+// Inicialização do servidor
 const server = new SocketServer();
 server.start();
 
 // Tratamento para encerramento gracioso
 process.on("SIGINT", () => {
-  console.log("\nEncerrando o servidor...");
-  server.start();
+  console.log("\nEncerrando servidor...");
+  server.stop();
   process.exit(0);
 });
