@@ -1,19 +1,31 @@
 {
-  "name": "node-project",
+  "name": "socket-chat",
   "version": "1.0.0",
-  "description": "A sample Node.js project",
-  "main": "src/index.js",
+  "description": "Simple chat application using TCP sockets",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "node src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "start:server": "ts-node src/server.ts",
+    "start:client": "ts-node src/client.ts",
+    "dev:server": "nodemon --exec ts-node src/server.ts",
+    "dev:client": "nodemon --exec ts-node src/client.ts",
+    "start": "npm run build && node dist/server.js"
   },
-  "keywords": [],
+  "keywords": [
+    "socket",
+    "chat",
+    "tcp",
+    "nodejs"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "fs": "^0.0.1-security"
+    "chalk": "^4.1.2"
   },
   "devDependencies": {
-    "@types/node": "^22.13.10"
+    "@types/node": "^20.11.28",
+    "nodemon": "^3.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.2"
   }
 }
