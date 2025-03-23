@@ -1,43 +1,38 @@
 import * as net from "net";
 import * as fs from "fs";
+import { MessageType, Message, Protocol } from "./protocol";
 
 // Configurações do servidor
-const HOST = "127.0.0.1"; // localhost
+const HOST = "127.0.0.1";
 const PORT = 3000;
 
-// Classe para gerenciar o servidor socket
-class SocketServer {
+// Classe para gerenciar o servidor socket com protocolo personalizado
+class EnhancedSocketServer {
   private server: net.Server;
-  private clients: Map<string, net.Socket>;
+  private clients: Map<string, { socket: net.Socket; username: string }>;
   private logStream: fs.WriteStream;
 
   constructor() {
-    // Inicialização do servidor e estruturas de dados
     this.server = net.createServer();
-    this.clients = new Map<string, net.Socket>();
+    this.clients = new Map<string, { socket: net.Socket; username: string }>();
     this.logStream = fs.createWriteStream("server_log.txt", { flags: "a" });
 
     this.initialize();
   }
 
-  // Configuração dos listeners de eventos do servidor
   private initialize(): void {
-    // Evento disparado quando o servidor começa a escutar
     this.server.on("listening", () => {
       console.log(`Servidor rodando em ${HOST}:${PORT}`);
       this.log(`Servidor iniciado em ${new Date().toISOString()}`);
     });
 
-    // Evento disparado quando um cliente se conecta
     this.server.on("connection", this.handleConnection.bind(this));
 
-    // Evento disparado quando ocorre um erro no servidor
     this.server.on("error", (err: Error) => {
       console.error("Erro no servidor:", err.message);
       this.log(`ERRO: ${err.message}`);
     });
 
-    // Evento disparado quando o servidor é fechado
     this.server.on("close", () => {
       console.log("Servidor encerrado");
       this.log("Servidor encerrado");
@@ -45,42 +40,63 @@ class SocketServer {
     });
   }
 
-  // Método para lidar com novas conexões
   private handleConnection(socket: net.Socket): void {
-    // Gerar um ID único para o cliente com base no endereço e porta
     const clientId = `${socket.remoteAddress}:${socket.remotePort}`;
-    this.clients.set(clientId, socket);
+
+    // Inicialmente associamos o cliente com um nome temporário
+    this.clients.set(clientId, { socket, username: clientId });
 
     console.log(`Cliente conectado: ${clientId}`);
     this.log(`Nova conexão: ${clientId}`);
 
-    // Enviar mensagem de boas-vindas ao cliente
-    socket.write(`Bem-vindo ao servidor! Seu ID é: ${clientId}\n`);
+    // Buffer para armazenar dados parciais
+    let buffer = "";
 
-    // Configurar tratadores de eventos para o socket do cliente
+    // Enviar mensagem de boas-vindas
+    const welcomeMsg = Protocol.createStatusMessage(
+      "Bem-vindo ao servidor! Por favor, digite seu nome de usuário:"
+    );
+    socket.write(Protocol.serialize(welcomeMsg) + "\n");
 
-    // Evento disparado quando dados são recebidos do cliente
     socket.on("data", (data: Buffer) => {
-      const message = data.toString().trim();
-      console.log(`Mensagem de ${clientId}: ${message}`);
-      this.log(`Recebido de ${clientId}: ${message}`);
+      // Adicionar dados recebidos ao buffer
+      buffer += data.toString();
 
-      // Echo - envia a mensagem de volta para o cliente
-      const response = `Eco: ${message}\n`;
-      socket.write(response);
+      // Verificar se há mensagens completas no buffer (por terminador '\n')
+      const messages = buffer.split("\n");
+      buffer = messages.pop() || ""; // O último elemento pode ser uma mensagem incompleta
 
-      // Broadcast - envia a mensagem para todos os outros clientes
-      this.broadcast(clientId, `${clientId} diz: ${message}\n`);
+      for (const msg of messages) {
+        if (!msg.trim()) continue;
+
+        const message = Protocol.deserialize(msg);
+        if (!message) {
+          // Mensagem inválida
+          const errorMsg = Protocol.createErrorMessage(
+            "Formato de mensagem inválido"
+          );
+          socket.write(Protocol.serialize(errorMsg) + "\n");
+          continue;
+        }
+
+        this.processMessage(clientId, message);
+      }
     });
 
-    // Evento disparado quando o cliente fecha a conexão
     socket.on("end", () => {
-      console.log(`Cliente desconectado: ${clientId}`);
-      this.log(`Desconexão: ${clientId}`);
+      const username = this.clients.get(clientId)?.username || clientId;
+      console.log(`Cliente desconectado: ${username} (${clientId})`);
+      this.log(`Desconexão: ${username} (${clientId})`);
+
+      // Notificar outros clientes sobre a desconexão
+      const disconnectMsg = Protocol.createStatusMessage(
+        `${username} saiu do chat`
+      );
+      this.broadcastMessage(clientId, disconnectMsg);
+
       this.clients.delete(clientId);
     });
 
-    // Evento disparado quando ocorre um erro na conexão com o cliente
     socket.on("error", (err: Error) => {
       console.error(`Erro na conexão com ${clientId}:`, err.message);
       this.log(`ERRO com ${clientId}: ${err.message}`);
@@ -89,36 +105,162 @@ class SocketServer {
     });
   }
 
-  // Envia uma mensagem para todos os clientes exceto o remetente
-  private broadcast(senderId: string, message: string): void {
-    for (const [clientId, clientSocket] of this.clients.entries()) {
-      if (clientId !== senderId) {
-        clientSocket.write(message);
+  private processMessage(clientId: string, message: Message): void {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    const { socket, username } = client;
+
+    // Se o usuário ainda não definiu um nome, considere a primeira mensagem como definição do nome
+    if (username === clientId && message.content) {
+      const newUsername = message.content.trim();
+
+      // Verificar se o nome já está em uso
+      for (const [id, client] of this.clients.entries()) {
+        if (id !== clientId && client.username === newUsername) {
+          const errorMsg = Protocol.createErrorMessage(
+            "Este nome de usuário já está em uso. Por favor, escolha outro:"
+          );
+          socket.write(Protocol.serialize(errorMsg) + "\n");
+          return;
+        }
+      }
+
+      // Atualizar o nome do usuário
+      this.clients.set(clientId, { socket, username: newUsername });
+
+      // Confirmar o nome para o usuário
+      const confirmMsg = Protocol.createStatusMessage(
+        `Seu nome de usuário foi definido como: ${newUsername}`
+      );
+      socket.write(Protocol.serialize(confirmMsg) + "\n");
+
+      // Notificar outros clientes
+      const joinMsg = Protocol.createStatusMessage(
+        `${newUsername} entrou no chat`
+      );
+      this.broadcastMessage(clientId, joinMsg);
+
+      console.log(`Cliente ${clientId} definiu nome como: ${newUsername}`);
+      this.log(`Cliente ${clientId} definiu nome como: ${newUsername}`);
+
+      return;
+    }
+
+    // Processar mensagens com base no tipo
+    switch (message.type) {
+      case MessageType.CHAT:
+        console.log(`Mensagem de ${username}: ${message.content}`);
+        this.log(`Chat de ${username}: ${message.content}`);
+
+        // Criar uma mensagem normalizada para broadcast
+        const chatMsg = Protocol.createChatMessage(
+          username,
+          message.content || ""
+        );
+        this.broadcastMessage(clientId, chatMsg);
+        break;
+
+      case MessageType.PRIVATE:
+        if (message.recipient && message.content) {
+          // Encontrar o destinatário pelo nome de usuário
+          let recipientId: string | null = null;
+          for (const [id, client] of this.clients.entries()) {
+            if (client.username === message.recipient) {
+              recipientId = id;
+              break;
+            }
+          }
+
+          if (recipientId && this.clients.has(recipientId)) {
+            const recipientSocket = this.clients.get(recipientId)?.socket;
+            if (recipientSocket) {
+              // Enviar mensagem privada para o destinatário
+              const privateMsg = Protocol.createPrivateMessage(
+                username,
+                message.recipient,
+                message.content
+              );
+              recipientSocket.write(Protocol.serialize(privateMsg) + "\n");
+
+              // Confirmar envio para o remetente
+              const confirmMsg = Protocol.createStatusMessage(
+                `Mensagem privada enviada para ${message.recipient}`
+              );
+              socket.write(Protocol.serialize(confirmMsg) + "\n");
+
+              console.log(
+                `Mensagem privada de ${username} para ${message.recipient}: ${message.content}`
+              );
+              this.log(
+                `Privado de ${username} para ${message.recipient}: ${message.content}`
+              );
+            }
+          } else {
+            // Usuário não encontrado
+            const errorMsg = Protocol.createErrorMessage(
+              `Usuário '${message.recipient}' não encontrado`
+            );
+            socket.write(Protocol.serialize(errorMsg) + "\n");
+          }
+        }
+        break;
+
+      case MessageType.STATUS:
+        // Processar solicitações de status como lista de usuários online
+        if (message.content === "/users") {
+          const userList = Array.from(this.clients.values())
+            .map((client) => client.username)
+            .join(", ");
+
+          const statusMsg = Protocol.createStatusMessage(
+            `Usuários online: ${userList}`
+          );
+          socket.write(Protocol.serialize(statusMsg) + "\n");
+        }
+        break;
+
+      default:
+        // Tipo de mensagem desconhecido
+        const errorMsg = Protocol.createErrorMessage(
+          "Tipo de mensagem não suportado"
+        );
+        socket.write(Protocol.serialize(errorMsg) + "\n");
+    }
+  }
+
+  private broadcastMessage(excludeClientId: string, message: Message): void {
+    for (const [clientId, client] of this.clients.entries()) {
+      if (clientId !== excludeClientId) {
+        client.socket.write(Protocol.serialize(message) + "\n");
       }
     }
   }
 
-  // Registra uma mensagem no log
   private log(message: string): void {
     this.logStream.write(`[${new Date().toISOString()}] ${message}\n`);
   }
 
-  // Inicia o servidor
   public start(): void {
     this.server.listen(PORT, HOST);
   }
 
-  // Fecha o servidor e todas as conexões
   public stop(): void {
+    const shutdownMsg = Protocol.createStatusMessage(
+      "Servidor está sendo encerrado. Conexão será fechada."
+    );
+
     for (const client of this.clients.values()) {
-      client.destroy();
+      client.socket.write(Protocol.serialize(shutdownMsg) + "\n");
+      client.socket.end();
     }
+
     this.server.close();
   }
 }
 
 // Inicialização do servidor
-const server = new SocketServer();
+const server = new EnhancedSocketServer();
 server.start();
 
 // Tratamento para encerramento gracioso
