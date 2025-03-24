@@ -1,32 +1,25 @@
 {
-  "name": "socket-chat",
+  "name": "socket-project",
   "version": "1.0.0",
-  "description": "Simple chat application using TCP sockets",
-  "main": "dist/server.js",
-  "type": "commonjs",
+  "description": "Projeto acadêmico de sockets em TypeScript",
+  "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "start:server": "npx ts-node --transpile-only src/server.ts",
-    "start:client": "npx ts-node --transpile-only src/client.ts",
-    "dev:server": "nodemon --exec ts-node --transpile-only src/server.ts",
-    "dev:client": "nodemon --exec ts-node --transpile-only src/client.ts",
-    "start": "npm run build && node dist/server.js"
+    "start:server": "node dist/server.js",
+    "start:client": "node dist/client.js",
+    "dev:server": "tsc -w & nodemon dist/server.js",
+    "dev:client": "tsc -w & nodemon dist/client.js"
   },
   "keywords": [
     "socket",
-    "chat",
-    "tcp",
-    "nodejs"
+    "typescript",
+    "networking"
   ],
-  "author": "",
+  "author": "gustavoo121",
   "license": "ISC",
-  "dependencies": {
-    "chalk": "^4.1.2"
-  },
   "devDependencies": {
-    "@types/node": "^20.11.28",
-    "nodemon": "^3.1.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
+    "@types/node": "^18.0.0",
+    "nodemon": "^2.0.20",
+    "typescript": "^4.9.0"
   }
 }
