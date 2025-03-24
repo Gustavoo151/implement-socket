@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cliente Socket Web</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Cliente Socket Web</h1>
+            <div id="connection-status" class="disconnected">Desconectado</div>
+        </header>
+
+        <div class="chat-container">
+            <div id="messages" class="messages"></div>
+
+            <div class="input-area">
+                <input type="text" id="message-input" placeholder="Digite sua mensagem..." disabled>
+                <button id="send-btn" disabled>Enviar</button>
+            </div>
+
+            <div class="help-text">
+                <p>Use <code>/broadcast mensagem</code> para enviar uma mensagem para todos os clientes</p>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="connect-btn">Conectar</button>
+            <button id="disconnect-btn" disabled>Desconectar</button>
+            <button id="clear-btn">Limpar Chat</button>
+        </div>
+    </div>
+
+    <footer>
+        <p>Projeto Acadêmico de Sockets em TypeScript - 2025</p>
+    </footer>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/client.js"></script>
+</body>
+
+</html>
